@@ -65,10 +65,16 @@ On the Settings tab, under OAuth Settings:
 - **Flow Enablement**: *Enable Authorization Code and Credentials Flow*
   must be on. An app created for the client credentials flow will not
   have it, and nothing else works until it is enabled.
-- **Callback URL** set to the redirect URI shown in the connector's
-  settings screen. Copy it from there rather than reproducing it from
-  memory; it must match exactly. A client-credentials-only app has none
-  set, since that flow uses no callback.
+- **Callback URL** must include claude.ai's MCP redirect URI:
+
+  ```
+  https://claude.ai/api/mcp/auth_callback
+  ```
+
+  It must match exactly. Salesforce accepts several callback URLs, one
+  per line, so adding this one does not disturb existing entries. Confirm
+  the value against the connector's settings screen if a future client
+  uses a different URI.
 - **OAuth Scopes**: `api`, `refresh_token`, and `sfap_api` if the org
   lists it.
 - If the connector asks for a client ID but no secret, it is acting as a
@@ -99,6 +105,11 @@ wrong redirect URI: it means the client ID is recognized, the
 authorization code flow is enabled, and PKCE is accepted, leaving only
 the callback URL to configure. An unrecognized client ID or a disabled
 flow fails earlier and differently.
+
+Re-running with the real redirect URI then confirms the callback itself.
+A `302` to `RemoteAccessAuthorizationPage.apexp` means Salesforce
+accepted it and reached the consent screen, so the app is fully
+configured and anything still failing is on the client side.
 
 Note that a `client_credentials` token request failing with
 `invalid_grant: no client credentials user enabled` says nothing about
