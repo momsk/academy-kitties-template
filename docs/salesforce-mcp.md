@@ -80,6 +80,31 @@ On the Policies tab, **Permitted Users** should be "All users can
 self-authorize" unless users are to be pre-authorized by profile or
 permission set.
 
+### Verifying the app without completing a browser flow
+
+The authorize endpoint reports configuration problems without any consent
+step, which makes it a fast way to check the app from a terminal:
+
+```bash
+curl -si "https://cutarellivision.my.salesforce.com/services/oauth2/authorize\
+?response_type=code&client_id=<consumer key>\
+&redirect_uri=https%3A%2F%2Fexample.com%2Fcb\
+&scope=api%20refresh_token\
+&code_challenge=E9Melhoa2OwvFrEMTJguCHaoeK1t8URWbuGJSstw-cM\
+&code_challenge_method=S256"
+```
+
+`error=redirect_uri_mismatch` is the healthy response to a deliberately
+wrong redirect URI: it means the client ID is recognized, the
+authorization code flow is enabled, and PKCE is accepted, leaving only
+the callback URL to configure. An unrecognized client ID or a disabled
+flow fails earlier and differently.
+
+Note that a `client_credentials` token request failing with
+`invalid_grant: no client credentials user enabled` says nothing about
+the connector. That flow needs a run-as user; the connector does not use
+it.
+
 App changes take several minutes to propagate. Retrying immediately
 produces a failure indistinguishable from the original one.
 
