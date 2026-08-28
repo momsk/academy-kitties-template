@@ -12,12 +12,59 @@ Org: `https://cutarellivision.lightning.force.com`
 
 All steps work from a browser, including mobile Safari.
 
+A connected app is **required**. Salesforce does not support OAuth
+dynamic client registration, so the connector cannot create its own OAuth
+client — see [Connected app required](#connected-app-required) below for
+why, and configure the app before starting here.
+
 1. claude.ai → Settings → Connectors
 2. Add the **Salesforce** connector
-3. Authorize it, selecting the `cutarellivision` org at the Salesforce
+3. Open its settings and enter the connected app's **Consumer Key** as
+   the OAuth Client ID (plus the Consumer Secret if the field is shown)
+4. Authorize it, selecting the `cutarellivision` org at the Salesforce
    login prompt — the OAuth consent screen is what binds the connector to
    a specific org, so pick carefully if you are logged into more than one
-4. Enable the connector for the chat or session you want to use it in
+5. Enable the connector for the chat or session you want to use it in
+
+### Connected app required
+
+Connecting without a client ID fails with:
+
+```
+Couldn't register with Salesforce - Beta's sign-in service.
+You can try again, or add an OAuth Client ID in the connector settings.
+```
+
+This is expected, not a bug, and retrying cannot fix it.
+`https://api.salesforce.com/.well-known/oauth-authorization-server`
+publishes no `registration_endpoint`, so RFC 7591 dynamic client
+registration has nothing to register against. The OAuth client must be
+supplied by hand.
+
+An earlier failure mode, `Failed to start MCP authorization`, comes from
+the same cause but gives no useful detail. If the connector record is
+left in `installState: "unknown"`, remove and re-add it rather than
+retrying on top of the stale record.
+
+Configure the connected app in Setup → App Manager → Edit:
+
+- **Enable OAuth Settings** on. An app built only for the client
+  credentials flow will not have this configured, since that flow uses no
+  callback.
+- **Callback URL** set to the redirect URI shown in the connector's
+  settings screen. Copy it from there rather than reproducing it from
+  memory; it must match exactly.
+- **Selected OAuth Scopes**: `api`, `refresh_token`, and `sfap_api` if
+  the org lists it.
+- If the connector asks for a client ID but no secret, it is acting as a
+  public client: uncheck *Require Secret for Web Server Flow* and
+  *Require Secret for Refresh Token Flow*, and check *Require Proof Key
+  for Code Exchange (PKCE)*.
+
+Connected app changes take several minutes to propagate. Retrying
+immediately produces a failure indistinguishable from the original one.
+
+Credentials come from App Manager → View → **Manage Consumer Details**.
 
 A connector can show as connected at the account level while still being
 toggled off for an individual chat, in which case its tools are not
