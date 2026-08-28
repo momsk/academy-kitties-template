@@ -46,25 +46,42 @@ the same cause but gives no useful detail. If the connector record is
 left in `installState: "unknown"`, remove and re-add it rather than
 retrying on top of the stale record.
 
-Configure the connected app in Setup → App Manager → Edit:
+This org uses an **External Client App** named `MCP Server Conn`, not a
+classic Connected App. The OAuth concepts are the same but the UI differs:
+External Client Apps live under Setup → Apps → **External Client Apps →
+External Client App Manager**, and split configuration across two tabs.
 
-- **Enable OAuth Settings** on. An app built only for the client
-  credentials flow will not have this configured, since that flow uses no
-  callback.
+- **Settings** tab → *OAuth Settings*: flow enablement, callback URL,
+  scopes, security options, and the consumer key/secret.
+- **Policies** tab: permitted users and org-level policy. It only
+  reflects flows enabled on the Settings tab.
+
+Classic Connected App instructions — "Enable OAuth Settings" in App
+Manager, credentials behind "Manage Consumer Details" — do not match this
+UI.
+
+On the Settings tab, under OAuth Settings:
+
+- **Flow Enablement**: *Enable Authorization Code and Credentials Flow*
+  must be on. An app created for the client credentials flow will not
+  have it, and nothing else works until it is enabled.
 - **Callback URL** set to the redirect URI shown in the connector's
   settings screen. Copy it from there rather than reproducing it from
-  memory; it must match exactly.
-- **Selected OAuth Scopes**: `api`, `refresh_token`, and `sfap_api` if
-  the org lists it.
+  memory; it must match exactly. A client-credentials-only app has none
+  set, since that flow uses no callback.
+- **OAuth Scopes**: `api`, `refresh_token`, and `sfap_api` if the org
+  lists it.
 - If the connector asks for a client ID but no secret, it is acting as a
-  public client: uncheck *Require Secret for Web Server Flow* and
-  *Require Secret for Refresh Token Flow*, and check *Require Proof Key
-  for Code Exchange (PKCE)*.
+  public client: enable *Require Proof Key for Code Exchange (PKCE)* and
+  disable the require-secret options for the web server and refresh token
+  flows.
 
-Connected app changes take several minutes to propagate. Retrying
-immediately produces a failure indistinguishable from the original one.
+On the Policies tab, **Permitted Users** should be "All users can
+self-authorize" unless users are to be pre-authorized by profile or
+permission set.
 
-Credentials come from App Manager → View → **Manage Consumer Details**.
+App changes take several minutes to propagate. Retrying immediately
+produces a failure indistinguishable from the original one.
 
 A connector can show as connected at the account level while still being
 toggled off for an individual chat, in which case its tools are not
