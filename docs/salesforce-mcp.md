@@ -1,95 +1,79 @@
-# Salesforce MCP server
+# Salesforce MCP connection
 
-Connects this project to Salesforce via the Salesforce-hosted MCP
-endpoint:
+Salesforce access is provided by the first-party **Salesforce - Beta**
+connector in claude.ai, not by anything in this repository. There is no
+`.mcp.json` and no setup script — the connector is account-level
+configuration, so it applies to every session without any repo wiring.
+
+Org: `https://cutarellivision.lightning.force.com`
+(API host: `https://cutarellivision.my.salesforce.com`)
+
+## Setup
+
+All steps work from a browser, including mobile Safari.
+
+1. claude.ai → Settings → Connectors
+2. Add the **Salesforce** connector
+3. Authorize it, selecting the `cutarellivision` org at the Salesforce
+   login prompt — the OAuth consent screen is what binds the connector to
+   a specific org, so pick carefully if you are logged into more than one
+4. Enable the connector for the chat or session you want to use it in
+
+A connector can show as connected at the account level while still being
+toggled off for an individual chat, in which case its tools are not
+loaded. If the tools do not appear, check the per-chat connector
+settings.
+
+Tools exposed: `describe`, `discover`, `dispatch`, `dispatch_readonly`.
+
+## Notes
+
+- On a managed or enterprise Claude account, an admin may need to approve
+  the connector before it can be added.
+- A Salesforce admin may need to permit the Claude connected app in the
+  org.
+
+## Alternatives considered
+
+Two other routes were evaluated and rejected. Both work, but each costs
+setup that the first-party connector does not.
+
+### Hosted platform endpoint as a custom connector
+
+`https://api.salesforce.com/platform/mcp/v1/platform/sobject-all` is a
+live OAuth-protected MCP server. Unauthenticated requests return
+`401 {"errors":[{"message":"JWT Token is required"}]}`; a bogus bearer
+returns `401 Invalid token`. It publishes discovery at
+`/.well-known/oauth-protected-resource` and
+`/.well-known/oauth-authorization-server`:
 
 ```
-https://api.salesforce.com/platform/mcp/v1/platform/sobject-all
+authorization_servers:   https://login.salesforce.com
+scopes_supported:        api, sfap_api, refresh_token, einstein_gpt_api
+grant_types_supported:   authorization_code, refresh_token
+code_challenge_methods:  S256
+registration_endpoint:   (absent)
 ```
 
-Registered in `.mcp.json` as `salesforce-platform`. It is a remote HTTP
-MCP server — nothing runs locally, and no Salesforce CLI is involved.
+No `registration_endpoint` means no dynamic client registration, so
+adding it as a claude.ai custom connector requires supplying a connected
+app's OAuth client ID and secret, plus adding claude.ai's redirect URI to
+that connected app's callback URLs and granting it `api`, `sfap_api`, and
+`refresh_token`.
 
-## What the endpoint expects
+Its tool surface is limited to sObject access, which the first-party
+connector's `dispatch` already covers.
 
-Verified reachable from a session container. Unauthenticated requests
-return `401 {"errors":[{"message":"JWT Token is required"}]}`; a bogus
-bearer returns `401 Invalid token`. It publishes standard OAuth
-discovery:
+### Local Salesforce DX MCP server
 
-`https://api.salesforce.com/.well-known/oauth-protected-resource`
+[`@salesforce/mcp`](https://github.com/salesforcecli/mcp) run over stdio,
+authenticated through the Salesforce CLI auth store. This covers more
+ground than the hosted endpoint — metadata, deploy/retrieve, Apex tests,
+code analysis — but requires installing `@salesforce/cli` and
+`@salesforce/mcp` in every session container and authenticating the CLI
+before the server starts. Worth revisiting if metadata or deployment
+tooling is ever needed; it is the only one of the three that provides it.
 
-```json
-{
-  "resource": "https://api.salesforce.com",
-  "authorization_servers": ["https://login.salesforce.com"],
-  "scopes_supported": ["api", "sfap_api", "refresh_token", "einstein_gpt_api"]
-}
-```
-
-`https://api.salesforce.com/.well-known/oauth-authorization-server`
-
-```json
-{
-  "issuer": "https://login.salesforce.com",
-  "authorization_endpoint": "https://login.salesforce.com/services/oauth2/authorize",
-  "token_endpoint": "https://login.salesforce.com/services/oauth2/token",
-  "grant_types_supported": ["authorization_code", "refresh_token"],
-  "token_endpoint_auth_methods_supported": ["client_secret_post"],
-  "code_challenge_methods_supported": ["S256"]
-}
-```
-
-## Recommended: let Claude Code run the OAuth flow
-
-Because the endpoint publishes discovery metadata and supports
-`authorization_code` + `refresh_token` + PKCE, Claude Code can own the
-whole token lifecycle, refresh included:
-
-```bash
-claude mcp add --transport http salesforce-platform \
-  https://api.salesforce.com/platform/mcp/v1/platform/sobject-all
-# then, in session:  /mcp  ->  authenticate
-```
-
-The consent step needs a browser, so run it from a local Claude Code
-session rather than a headless web container.
-
-## Fallback: static bearer token
-
-`.mcp.json` expands `${SF_ACCESS_TOKEN}` from the environment, so setting
-that variable before the session starts also works. The token is not
-refreshed — when it expires the server starts returning `Invalid token`
-and you have to set a new one and restart the session.
-
-`scripts/sf-token.sh` mints one from a connected app using the client
-credentials flow:
-
-```bash
-export SF_CLIENT_ID=...        # connected app consumer key
-export SF_CLIENT_SECRET=...    # connected app consumer secret
-export SF_ACCESS_TOKEN="$(./scripts/sf-token.sh)"
-```
-
-Set the client id/secret as environment variables on the Claude Code
-environment rather than pasting them into a session transcript. Never
-commit them.
-
-**Untested caveat:** the authorization server metadata above lists only
-`authorization_code` and `refresh_token`. It does *not* list
-`client_credentials`, so a token from `scripts/sf-token.sh` may be
-rejected by `api.salesforce.com` even though it authenticates fine
-against the org's own REST API at
-`https://cutarellivision.my.salesforce.com`. Verify before relying on it.
-The `sfap_api` scope is likely required in addition to `api`.
-
-### Connected app requirements for this fallback
-
-In Setup → App Manager → your connected app → Edit:
-
-- **Enable Client Credentials Flow** checked.
-- A **Run As** user set (Manage → Edit Policies → Client Credentials
-  Flow). Every MCP call runs with that user's permissions and sharing.
-- OAuth scopes include `api` and `sfap_api`.
-- IP relaxation set so the container's egress address is not blocked, or
-  the run-as user's profile has "Login IP Ranges" left open.
+Note that the client credentials flow, which is the practical way to
+authenticate the CLI headlessly, returns no refresh token, so each
+session has to re-authenticate.
