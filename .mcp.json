@@ -3,6 +3,13 @@
     "salesforce": {
       "command": "sf-mcp-server",
       "args": ["--orgs", "cutarellivision", "--toolsets", "all"]
+    },
+    "salesforce-platform": {
+      "type": "http",
+      "url": "https://api.salesforce.com/platform/mcp/v1/platform/sobject-all",
+      "headers": {
+        "Authorization": "Bearer ${SF_ACCESS_TOKEN}"
+      }
     }
   }
 }
